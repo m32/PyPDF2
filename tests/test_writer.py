@@ -2196,3 +2196,60 @@ def test_mime_jupyter():
     writer = PdfWriter(clone_from=reader)
     assert reader._repr_mimebundle_(("include",), ("exclude",)) == {}
     assert writer._repr_mimebundle_(("include",), ("exclude",)) == {}
+
+
+def test_init_without_named_arg():
+    """Test to use file_obj argument and not clone_from"""
+    pdf_path = RESOURCE_ROOT / "crazyones.pdf"
+    reader = PdfReader(pdf_path)
+    writer = PdfWriter(clone_from=reader)
+    nb = len(writer._objects)
+    writer = PdfWriter(reader)
+    assert len(writer._objects) == nb
+    with open(pdf_path, "rb") as f:
+        writer = PdfWriter(f)
+        f.seek(0, 0)
+        by = BytesIO(f.read())
+    assert len(writer._objects) == nb
+    writer = PdfWriter(pdf_path)
+    assert len(writer._objects) == nb
+    writer = PdfWriter(str(pdf_path))
+    assert len(writer._objects) == nb
+    writer = PdfWriter(by)
+    assert len(writer._objects) == nb
+
+
+@pytest.mark.enable_socket()
+def test_i_in_choice_fields():
+    """Cf #2611"""
+    url = "https://github.com/py-pdf/pypdf/files/15176321/FRA.F.6180.150.pdf"
+    name = "iss2611.pdf"
+    writer = PdfWriter(BytesIO(get_data_from_url(url, name=name)))
+    assert "/I" in writer.get_fields()["State"].indirect_reference.get_object()
+    writer.update_page_form_field_values(
+        writer.pages[0], {"State": "NY"}, auto_regenerate=False
+    )
+    assert "/I" not in writer.get_fields()["State"].indirect_reference.get_object()
+
+
+def test_selfont():
+    writer = PdfWriter(clone_from=RESOURCE_ROOT / "FormTestFromOo.pdf")
+    writer.update_page_form_field_values(
+        writer.pages[0],
+        {"Text1": ("Text_1", "", 5), "Text2": ("Text_2", "/F3", 0)},
+        auto_regenerate=False,
+    )
+    assert (
+        b"/F3 5 Tf"
+        in writer.pages[0]["/Annots"][1].get_object()["/AP"]["/N"].get_data()
+    )
+    assert (
+        b"Text_1" in writer.pages[0]["/Annots"][1].get_object()["/AP"]["/N"].get_data()
+    )
+    assert (
+        b"/F3 12 Tf"
+        in writer.pages[0]["/Annots"][2].get_object()["/AP"]["/N"].get_data()
+    )
+    assert (
+        b"Text_2" in writer.pages[0]["/Annots"][2].get_object()["/AP"]["/N"].get_data()
+    )
